@@ -1,0 +1,67 @@
+1、Java内部类实现单例模式原理：
+
+通过Java内部类方式实现的单例，既保持了单例类的安全性，也拥有懒加载的优点。那我们看一下他是怎么具体怎么实现的：
+public class LazyInitHolderSingleton {
+    private LazyInitHolderSingleton(){
+        
+    }
+    private static class SingletonHolder{
+        private final static LazyInitHolderSingleton instance=new LazyInitHolderSingleton();
+    }
+    public static LazyInitHolderSingleton getInstance(){
+        return SingletonHolder.instance;
+    }
+}
+
+ SingletonHolder，是一个类，而且是一个内部类，类只有在调用的时候，才会初始化其中的类成员常量， 这就保证了它的懒加载。
+ static final LazyInitHolderSingleton INSTANCE，常量再来初始化外部单例类的实例
+
+public static LazyInitHolderSingleton getInstance() { 
+            return SingletonHolder.INSTANCE; 
+    }  
+.这个方法是属于类LazyInitHolderSingleton 的方法，在获取单例的时候，是调用一个类(内部类)的类成员常量
+使用：
+LazyInitHolderSingleton clazz = LazyInitHolderSingleton.getInstance()；
+
+那如何保证它的线程安全呢？
+一个类的成员常量只有1份，类的成员常量不可能会重复，这是Jvm的加载机制能够保证的。
+INSTANCE的实例是在加载类SingletonHolder的时候初始化的，既先有了INSTANCE的实例了，再返回的所以保证了并发一致性。
+因此内部类实现的单例模式不仅延时实例化instance，节省了内存，并且也是线程安全的。这是推荐使用的一种单例模式。
+
+2、Valitile保证执行操作的可见性和有序性，但并不能保证原子性。
+可见性即：每个多线程操作会在当前线程保存有主存中变量的一个副本，valitile修饰的变量，会保证多线程每次获取变量时，不会从当前线程的缓存中获取，而是每次都要
+去主存中获取，如果在当前线程中修改了变量，则会更新到主存中，这就保证了变量的可见性。
+那是怎么保证有序性的呢？
+volatile关键字能禁止指令重排序，所以volatile能在一定程度上保证有序性。
+可以理解为： 1）当程序执行到volatile变量的读操作或者写操作时，在其前面的操作的更改肯定全部已经进行，且结果已经对后面的操作可见；
+并且其后面的操作肯定还没有进行；
+2）在进行指令优化时，不能将在对volatile变量访问的语句放在其后面执行，也不能把volatile变量后面的语句放到其前面执行。
+无法保证原子性：
+就好比常见的自增操作不是原子性操作，（自增操作也是分为两步进行的，首先会读取数据，然后对该数据进行加减操作）。
+而且volatile也无法保证对变量的任何操作都是原子性的。（比如两个线程同时对内存中变量进行读写操作，虽然每个线程对变量能保证可见，但当前一线程对变量的修改
+阻塞之后，显然内存里的值也不会发生变化，后一线程只能获取内存中未变化的值进行写操作。前一进程然后执行写操作，进而发生数据的不同步问题）
+因此 valitile关键字修饰变量 能够保证变量的可见性和有序性，但不能保证原子性操作。可用Java提供的synchronized关键字以及lock.
+
+3、java总父类中提供哪些方法
+Object类中提供了九个方法：分别是getClass()、clone()、toString（）、wait()、notify()、notifyAll()、equals()、hashCode()、finalize（）；
+除了经常用到的可能怀疑wait()notify() notifyall()方法为什么是属于Object类的，这就解释了Java的面相对象思想，所有的都可以是对象，操作的也是对象。
+在锁操作时，我们也是对对象加锁，解锁操作，所以这两个方法是属于Object的变得理所当然了。
+
+4、copyOnWriteArrayList与copyOnWriteSet的原理 并没有map的实现。
+copyOnWriteArrayList的原理就是当发生多线程读操作时，并不会发生并发问题，当写操作时，会重新创建一个新的list，并将数据复制到新的list中，对新的list
+进行写操作，对数据进行修改，修改完之后再将数据写回原来的list中。
+CopyOnWriteArrayList适合使用在读操作远远大于写操作的场景里，比如缓存。发生修改时候做copy，新老版本分离，保证读的高性能，适用于以读为主的情况
+
+5、Java虚拟机加载的双亲委派机制
+Java Class的加载过程是：首先将java文件读到内存中，然后类加载器加载，并通过编译器将Java文件编译为calss文件。
+双亲委派机制：某个特定的类加载器在接到加载类的请求时，首先将加载任务委托给父类加载器，依次递归，如果父类加载器可以完成类加载任务，就成功返回；
+只有父类加载器无法完成此加载任务时，才自己去加载。
+感觉跟Android中的点击事件正好相反，点击事件首先通过父类控件去接受然后判断是否处理，如果不处理然后分派给自己的子控件，最后如果还是不能处理，则父控件再处理。
+还有几点必须注意的：只有当你使用该class的时候才会去装载，一个classloader只会装载同一个class一次。这里也解释了上面静态内部类方式实现单例模式。
+判断两个类是否为同一对象的标准里面有一条是类加载器必须为相同。在Java中判断两个类是否相同，是通过类的路径判断的，但在JVM中，还需要添加类加载器标示，
+不同的类加载器加载相同的类，在jvm中也会生成不同的类，这也就防止内存中出现多个相同的字节码文件。
+在线程中加载一个类的时候：当前线程的类加载器可以通过Thread类的getContextClassLoader()获得，也可以通过setContextClassLoader()自己设置类加载器。
+
+6、
+
+
